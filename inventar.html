@@ -1,0 +1,1546 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Klinika Inventarizatsiyasi</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root{
+    --ink:#1b211f;
+    --ink-soft:#5c6560;
+    --paper:#f4f2ec;
+    --panel:#ffffff;
+    --panel-alt:#fbfaf6;
+    --teal:#1d4844;
+    --teal-deep:#0f2b29;
+    --teal-soft:#e2ebe8;
+    --gold:#b8863f;
+    --gold-deep:#8f6529;
+    --gold-soft:#f2e4cc;
+    --line:#e2ded1;
+    --danger:#a13f2f;
+    --danger-soft:#f9e5e0;
+    --ok:#3f8a5c;
+    --ok-soft:#e3f1e7;
+    --radius:12px;
+    --radius-sm:8px;
+    --shadow:0 1px 2px rgba(15,43,41,0.06), 0 8px 24px -12px rgba(15,43,41,0.14);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;}
+  .num{font-family:'JetBrains Mono',monospace;}
+  .display{font-family:'Fraunces',serif;}
+  ::selection{background:var(--gold-soft);}
+
+  /* ---------- header ---------- */
+  header.top{
+    background:var(--teal-deep);
+    color:#f2efe6;
+    padding:16px 26px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:14px;
+    border-bottom:3px solid var(--gold);
+  }
+  header.top .title-block{display:flex;flex-direction:column;gap:3px;}
+  header.top h1{
+    font-family:'Fraunces',serif;
+    font-weight:600;
+    font-size:1.3rem;
+    margin:0;
+    letter-spacing:0.2px;
+  }
+  header.top .sub{
+    font-size:0.74rem;color:#b7c7c2;letter-spacing:0.2px;
+    display:flex;align-items:center;gap:6px;
+  }
+  .status-dot{width:7px;height:7px;border-radius:50%;background:#888;display:inline-block;}
+  .status-dot.online{background:#7fd99a;box-shadow:0 0 0 3px rgba(127,217,154,0.2);}
+  .status-dot.offline{background:#e0836f;}
+
+  .top-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .grand-total{
+    display:flex;align-items:baseline;gap:7px;
+    background:rgba(255,255,255,0.06);
+    border:1px solid rgba(255,255,255,0.16);
+    padding:7px 14px;border-radius:var(--radius-sm);
+  }
+  .grand-total .n{font-family:'JetBrains Mono',monospace;font-size:1.25rem;font-weight:700;color:#f0dcb8;}
+  .grand-total .l{font-size:0.68rem;color:#b7c7c2;text-transform:uppercase;letter-spacing:0.5px;}
+  .export-btn, .import-btn{
+    border:none;padding:9px 15px;
+    border-radius:var(--radius-sm);cursor:pointer;font-size:0.8rem;font-weight:600;
+    display:flex;align-items:center;gap:6px;font-family:'Inter',sans-serif;
+  }
+  .export-btn{background:var(--gold);color:#fff;}
+  .export-btn:hover{background:var(--gold-deep);}
+  .import-btn{background:transparent;color:#f2efe6;border:1px solid rgba(255,255,255,0.3);}
+  .import-btn:hover{background:rgba(255,255,255,0.08);border-color:#fff;}
+
+  /* ---------- layout ---------- */
+  .layout{display:grid;grid-template-columns:208px 1fr;min-height:calc(100vh - 68px);}
+  @media (max-width:820px){
+    .layout{grid-template-columns:1fr;}
+    .sidebar{border-right:none;border-bottom:1px solid var(--line);flex-direction:row;overflow-x:auto;padding:10px 12px;}
+    .sidebar .nav-item{white-space:nowrap;}
+  }
+
+  .sidebar{background:var(--teal-deep);padding:20px 10px;display:flex;flex-direction:column;gap:2px;}
+  .nav-item{
+    display:flex;align-items:center;gap:10px;
+    padding:10px 12px;border-radius:8px;color:#c9d6d1;cursor:pointer;
+    font-size:0.88rem;font-weight:500;transition:background .15s,color .15s;
+  }
+  .nav-item .ic{font-size:1rem;width:18px;text-align:center;}
+  .nav-item:hover{background:rgba(255,255,255,0.06);color:#f2efe6;}
+  .nav-item.active{background:var(--teal);color:#fff;font-weight:600;}
+  .nav-item .count{
+    margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:0.7rem;
+    background:rgba(255,255,255,0.12);padding:1px 7px;border-radius:20px;color:#dfe9e6;
+  }
+  .nav-item.active .count{background:rgba(255,255,255,0.2);}
+
+  main{padding:24px 30px 60px;max-width:1180px;}
+  @media (max-width:600px){main{padding:16px 14px 40px;}}
+
+  .breadcrumb{
+    display:flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--ink-soft);
+    margin-bottom:14px;cursor:pointer;width:fit-content;
+  }
+  .breadcrumb:hover{color:var(--teal-deep);}
+
+  .page-head{margin-bottom:20px;}
+  .page-head h2{font-family:'Fraunces',serif;font-size:1.35rem;margin:0 0 4px;color:var(--teal-deep);}
+  .page-head .desc{color:var(--ink-soft);font-size:0.85rem;}
+
+  /* ---------- stat cards ---------- */
+  .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:26px;}
+  @media (max-width:760px){.stat-grid{grid-template-columns:repeat(2,1fr);}}
+  .stat-card{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px 16px 14px;box-shadow:var(--shadow);
+  }
+  .stat-card .v{font-family:'JetBrains Mono',monospace;font-size:1.5rem;font-weight:700;color:var(--teal-deep);}
+  .stat-card .v.warn{color:var(--danger);}
+  .stat-card .l{font-size:0.74rem;color:var(--ink-soft);margin-top:2px;}
+
+  .section-block{margin-bottom:30px;}
+  .section-block-head{
+    display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px;
+  }
+  .section-block-head h3{font-family:'Fraunces',serif;font-size:1.05rem;margin:0;color:var(--teal-deep);}
+  .section-link{font-size:0.8rem;color:var(--gold-deep);cursor:pointer;font-weight:600;}
+  .section-link:hover{text-decoration:underline;}
+
+  /* ---------- rooms grid ---------- */
+  .rooms-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;}
+  .room-card{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px;cursor:pointer;box-shadow:var(--shadow);transition:transform .12s, border-color .12s;
+  }
+  .room-card:hover{border-color:var(--gold);transform:translateY(-1px);}
+  .room-card .name{font-family:'Fraunces',serif;font-size:1.05rem;color:var(--teal-deep);margin-bottom:8px;}
+  .room-card .meta{display:flex;align-items:center;justify-content:space-between;}
+  .room-card .meta .tot{font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--gold-deep);font-size:0.95rem;}
+  .room-card .meta .cnt{font-size:0.72rem;color:var(--ink-soft);}
+  .add-room-card{
+    display:flex;align-items:center;justify-content:center;
+    border:1.5px dashed var(--line);border-radius:var(--radius);
+    color:var(--ink-soft);cursor:pointer;font-size:0.85rem;font-weight:600;min-height:78px;
+  }
+  .add-room-card:hover{border-color:var(--gold);color:var(--gold-deep);background:var(--panel-alt);}
+
+  /* ---------- room detail ---------- */
+  .room-header{
+    display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:10px;
+    margin-bottom:16px;border-bottom:1px solid var(--line);padding-bottom:12px;
+  }
+  .room-header input.room-name{
+    font-family:'Fraunces',serif;font-size:1.4rem;font-weight:600;border:none;
+    background:transparent;color:var(--teal-deep);padding:2px 4px;border-radius:4px;min-width:120px;
+  }
+  .room-header input.room-name:focus{outline:2px solid var(--gold);background:#fff;}
+  .room-meta{display:flex;align-items:center;gap:12px;}
+  .room-total-chip{
+    font-family:'JetBrains Mono',monospace;background:var(--teal-soft);color:var(--teal-deep);
+    padding:5px 12px;border-radius:20px;font-size:0.82rem;font-weight:700;
+  }
+  .delete-room-btn{
+    background:none;border:1px solid var(--line);color:var(--danger);
+    padding:6px 10px;border-radius:6px;cursor:pointer;font-size:0.76rem;
+  }
+  .delete-room-btn:hover{background:var(--danger-soft);}
+
+  /* ---------- tables ---------- */
+  table.inv{width:100%;border-collapse:collapse;background:var(--panel);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);}
+  table.inv thead th{
+    text-align:left;font-size:0.68rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--ink-soft);
+    padding:9px 14px;border-bottom:1px solid var(--line);background:var(--panel-alt);
+  }
+  table.inv thead th.qty-col{text-align:right;width:110px;}
+  table.inv thead th.action-col{width:40px;}
+  table.inv tbody tr{border-bottom:1px solid var(--line);}
+  table.inv tbody tr:last-child{border-bottom:none;}
+  table.inv tbody tr:hover{background:var(--panel-alt);}
+  table.inv td{padding:6px 14px;vertical-align:middle;}
+  table.inv td input.item-name{
+    width:100%;border:1px solid transparent;background:transparent;padding:6px 6px;
+    font-size:0.9rem;border-radius:5px;color:var(--ink);font-family:'Inter',sans-serif;
+  }
+  table.inv td input.item-name:focus{outline:none;border-color:var(--gold);background:#fffdf8;}
+  table.inv td input.item-qty{
+    width:100%;text-align:right;border:1px solid transparent;background:transparent;
+    padding:6px 8px;font-size:0.92rem;border-radius:5px;font-family:'JetBrains Mono',monospace;
+    font-weight:600;color:var(--teal-deep);
+  }
+  table.inv td input.item-qty:focus{outline:none;border-color:var(--gold);background:#fffdf8;}
+  .row-del{background:none;border:none;color:#a6a196;cursor:pointer;font-size:0.95rem;padding:4px 8px;border-radius:5px;}
+  .row-del:hover{color:var(--danger);background:var(--danger-soft);}
+
+  .add-item-row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;}
+  .add-item-row input{padding:8px 12px;border:1px solid var(--line);border-radius:7px;font-size:0.86rem;font-family:'Inter',sans-serif;}
+  .add-item-row input.new-name{flex:1;min-width:180px;}
+  .add-item-row input.new-qty{width:86px;font-family:'JetBrains Mono',monospace;}
+  .add-item-row button{padding:8px 15px;background:var(--teal);color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:0.82rem;font-weight:600;}
+  .add-item-row button:hover{background:var(--teal-deep);}
+  .hint{font-size:0.7rem;color:var(--ink-soft);margin-top:2px;width:100%;}
+
+  /* ---------- summary ---------- */
+  table.summary{width:100%;border-collapse:collapse;background:var(--panel);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);}
+  table.summary thead th{
+    text-align:left;font-size:0.68rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--ink-soft);
+    padding:9px 14px;border-bottom:1px solid var(--line);background:var(--panel-alt);
+  }
+  table.summary thead th.num-col{text-align:right;width:120px;}
+  table.summary td{padding:8px 14px;border-bottom:1px solid var(--line);font-size:0.9rem;}
+  table.summary td.num-col{text-align:right;font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--teal-deep);}
+  table.summary tr:last-child td{border-bottom:none;}
+  table.summary tr.total-row td{background:var(--gold-soft);font-weight:700;color:var(--teal-deep);}
+
+  /* ---------- warehouse ---------- */
+  .wh-columns{display:grid;grid-template-columns:1fr 1.3fr;gap:22px;align-items:start;}
+  @media (max-width:980px){.wh-columns{grid-template-columns:1fr;}}
+  .wh-tx-form{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  .wh-tx-form select, .wh-tx-form input{
+    padding:8px 12px;border:1px solid var(--line);border-radius:7px;font-size:0.86rem;
+    font-family:'Inter',sans-serif;background:#fff;color:var(--ink);
+  }
+  .wh-tx-form select{cursor:pointer;}
+  .wh-tx-filter-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap;}
+  .wh-tx-filter-row select{padding:6px 10px;border:1px solid var(--line);border-radius:7px;font-size:0.8rem;background:#fff;}
+  .tx-badge{
+    font-size:0.68rem;font-weight:700;padding:3px 9px;border-radius:20px;
+    text-transform:uppercase;letter-spacing:0.3px;display:inline-block;
+  }
+  .tx-badge.in{background:var(--ok-soft);color:var(--ok);}
+  .tx-badge.out{background:var(--danger-soft);color:var(--danger);}
+  .wh-stock-low{color:var(--danger);font-weight:700;}
+  .low-stock-strip{
+    display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;
+  }
+  .low-chip{
+    background:var(--danger-soft);color:var(--danger);border-radius:20px;padding:5px 12px;
+    font-size:0.78rem;font-weight:600;display:flex;align-items:center;gap:6px;
+  }
+
+  /* ---------- recent activity (dashboard) ---------- */
+  .activity-list{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;}
+  .activity-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);font-size:0.85rem;}
+  .activity-row:last-child{border-bottom:none;}
+  .activity-row .a-item{flex:1;color:var(--ink);}
+  .activity-row .a-meta{color:var(--ink-soft);font-size:0.75rem;}
+  .empty-note{color:var(--ink-soft);font-size:0.85rem;padding:20px 4px;}
+
+  /* ---------- misc ---------- */
+  .toast{
+    position:fixed;bottom:18px;right:18px;background:var(--teal-deep);color:#f2efe6;
+    padding:10px 16px;border-radius:8px;font-size:0.82rem;opacity:0;transform:translateY(8px);
+    transition:opacity .2s, transform .2s;pointer-events:none;z-index:50;
+  }
+  .toast.show{opacity:1;transform:translateY(0);}
+  .toast.error{background:var(--danger);}
+  .loading{padding:60px 20px;text-align:center;color:var(--ink-soft);}
+
+  /* ---------- responsible person ---------- */
+  .responsible-row{display:flex;align-items:center;gap:8px;margin-top:6px;}
+  .responsible-row .r-label{font-size:0.74rem;color:var(--ink-soft);}
+  .responsible-row input{
+    border:1px solid var(--line);background:#fff;border-radius:7px;padding:5px 10px;
+    font-size:0.83rem;font-family:'Inter',sans-serif;min-width:170px;
+  }
+  .responsible-row input:focus{outline:none;border-color:var(--gold);}
+  .room-card .rp{font-size:0.72rem;color:var(--ink-soft);margin-top:6px;}
+
+  .info-btn, .qr-btn{
+    background:none;border:1px solid var(--line);color:var(--ink-soft);cursor:pointer;
+    font-size:0.85rem;padding:4px 7px;border-radius:5px;
+  }
+  .info-btn:hover{border-color:var(--teal);color:var(--teal);}
+  .qr-btn:hover{border-color:var(--gold);color:var(--gold-deep);}
+
+  /* ---------- modal ---------- */
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(15,43,41,0.45);z-index:60;
+    display:flex;align-items:center;justify-content:center;padding:16px;
+  }
+  .modal-box{
+    background:#fff;border-radius:var(--radius);max-width:440px;width:100%;
+    max-height:90vh;overflow-y:auto;box-shadow:0 20px 50px -12px rgba(0,0,0,0.35);
+  }
+  .modal-head{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:16px 20px;border-bottom:1px solid var(--line);
+  }
+  .modal-head h3{font-family:'Fraunces',serif;font-size:1.1rem;margin:0;color:var(--teal-deep);}
+  .modal-close{background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--ink-soft);}
+  .modal-close:hover{color:var(--danger);}
+  .modal-body{padding:18px 20px;display:flex;flex-direction:column;gap:12px;}
+  .field-group label{display:block;font-size:0.72rem;color:var(--ink-soft);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.4px;}
+  .field-group input, .field-group textarea{
+    width:100%;border:1px solid var(--line);border-radius:7px;padding:8px 10px;
+    font-size:0.88rem;font-family:'Inter',sans-serif;color:var(--ink);background:#fff;
+  }
+  .field-group textarea{min-height:60px;resize:vertical;}
+  .field-group input:focus, .field-group textarea:focus{outline:none;border-color:var(--gold);}
+  .field-static{
+    background:var(--panel-alt);border-radius:7px;padding:8px 10px;font-size:0.88rem;color:var(--ink);
+  }
+  .modal-actions{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-top:1px solid var(--line);}
+  .qr-view{display:flex;flex-direction:column;align-items:center;gap:10px;padding:6px 0;}
+  .qr-view canvas, .qr-view img{border:1px solid var(--line);border-radius:8px;padding:8px;background:#fff;}
+  .qr-link{font-size:0.72rem;color:var(--ink-soft);word-break:break-all;text-align:center;}
+  .btn-primary{background:var(--teal);color:#fff;border:none;padding:8px 15px;border-radius:7px;cursor:pointer;font-size:0.82rem;font-weight:600;}
+  .btn-primary:hover{background:var(--teal-deep);}
+  .btn-secondary{background:none;border:1px solid var(--line);color:var(--ink);padding:8px 15px;border-radius:7px;cursor:pointer;font-size:0.82rem;font-weight:600;}
+  .btn-secondary:hover{background:var(--panel-alt);}
+
+  /* ---------- public scan view ---------- */
+  .scan-wrap{max-width:480px;margin:40px auto;padding:0 16px;}
+  .scan-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:26px;}
+  .scan-card h2{font-family:'Fraunces',serif;color:var(--teal-deep);margin:0 0 4px;font-size:1.4rem;}
+  .scan-card .code{font-family:'JetBrains Mono',monospace;color:var(--gold-deep);font-size:0.82rem;margin-bottom:16px;}
+  .scan-row{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:0.9rem;}
+  .scan-row:last-child{border-bottom:none;}
+  .scan-row .k{color:var(--ink-soft);}
+  .scan-row .v{font-weight:600;color:var(--ink);text-align:right;}
+
+  /* ---------- labels (print) ---------- */
+  .labels-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:18px;}
+  .labels-toolbar select{padding:8px 12px;border:1px solid var(--line);border-radius:7px;font-size:0.85rem;background:#fff;}
+  .labels-sheet{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:10px;background:var(--panel);
+    border:1px solid var(--line);border-radius:var(--radius);padding:16px;
+  }
+  .label-card{
+    border:1px dashed var(--line);border-radius:8px;padding:10px;text-align:center;
+    display:flex;flex-direction:column;align-items:center;gap:6px;
+  }
+  .label-card .lname{font-size:0.76rem;font-weight:600;color:var(--ink);line-height:1.2;}
+  .label-card .lroom{font-size:0.66rem;color:var(--ink-soft);}
+  .label-card .lcode{font-size:0.66rem;font-family:'JetBrains Mono',monospace;color:var(--gold-deep);}
+  @media print{
+    header.top, .sidebar, .labels-toolbar, .breadcrumb, .page-head{display:none !important;}
+    body{background:#fff;}
+    .layout{display:block;}
+    main{padding:0;max-width:none;}
+    .labels-sheet{border:none;box-shadow:none;grid-template-columns:repeat(3,1fr);}
+    .label-card{border:1px solid #999;break-inside:avoid;}
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="title-block">
+    <h1>Klinika Inventarizatsiyasi</h1>
+    <div class="sub"><span class="status-dot" id="statusDot"></span><span id="statusText">Ulanmoqda...</span></div>
+  </div>
+  <div class="top-actions">
+    <div class="grand-total">
+      <span class="n" id="grandTotal">&mdash;</span>
+      <span class="l">jami dona</span>
+    </div>
+    <input type="file" id="importFileInput" accept=".xlsx,.xls" style="display:none;">
+    <button class="import-btn" id="importBtn">⬆ Excel'dan import</button>
+    <button class="export-btn" id="exportBtn">⬇ Excelga export</button>
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="nav-item" id="navDashboard" data-view="dashboard"><span class="ic">🏠</span><span>Bosh sahifa</span></div>
+    <div class="nav-item" id="navRooms" data-view="rooms"><span class="ic">🚪</span><span>Xonalar</span><span class="count" id="roomsCount">0</span></div>
+    <div class="nav-item" id="navWarehouse" data-view="warehouse"><span class="ic">📦</span><span>Ombor</span></div>
+    <div class="nav-item" id="navSummary" data-view="summary"><span class="ic">📊</span><span>Hisobot</span></div>
+    <div class="nav-item" id="navLabels" data-view="labels"><span class="ic">🏷</span><span>Yorliqlar</span></div>
+  </nav>
+
+  <main id="mainArea">
+    <div class="loading">Maʼlumotlar yuklanmoqda...</div>
+  </main>
+</div>
+
+<datalist id="itemNamesList"></datalist>
+<datalist id="whItemNamesList"></datalist>
+<div class="toast" id="toast">Saqlandi</div>
+<div id="modalRoot"></div>
+
+<script>
+const SUPABASE_URL = 'https://jdhfugitokvyinvjjzet.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_nwJBXeata_NLXUlT7VC8oQ_ehB3iiR-';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const APP_BASE_URL = 'https://drzafarjonovic.github.io/klinika-inventar/';
+
+let state = { rooms: [], warehouseItems: [], warehouseTransactions: [] };
+let activeView = 'dashboard';
+let openRoomId = null;
+let isTypingInThisRoom = false;
+let pendingRerender = false;
+let whItemFilter = 'all';
+
+function setStatus(online, text){
+  document.getElementById('statusDot').className = 'status-dot ' + (online ? 'online' : 'offline');
+  document.getElementById('statusText').textContent = text;
+}
+
+function showToast(msg, isError){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (isError ? ' error' : '');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(()=>{ t.className = 'toast'; }, 1800);
+}
+
+async function loadAll(){
+  const { data: rooms, error: rErr } = await sb.from('rooms').select('*').order('position', { ascending: true });
+  if(rErr){ setStatus(false, 'Ulanishda xatolik'); showToast('Xonalarni yuklab boʻlmadi: ' + rErr.message, true); return; }
+
+  const { data: items, error: iErr } = await sb.from('items').select('*').order('position', { ascending: true });
+  if(iErr){ setStatus(false, 'Ulanishda xatolik'); showToast('Jihozlarni yuklab boʻlmadi: ' + iErr.message, true); return; }
+
+  const byRoom = {};
+  (items||[]).forEach(it=>{ (byRoom[it.room_id] = byRoom[it.room_id] || []).push(it); });
+
+  state.rooms = (rooms||[]).map(r=> ({ ...r, items: byRoom[r.id] || [] }));
+
+  const { data: whItems, error: whiErr } = await sb.from('warehouse_items').select('*').order('position', { ascending: true });
+  if(whiErr){
+    state.warehouseItems = [];
+  } else {
+    state.warehouseItems = whItems || [];
+  }
+
+  const { data: whTx, error: whtErr } = await sb.from('warehouse_transactions').select('*').order('tx_date', { ascending: false });
+  if(whtErr){
+    state.warehouseTransactions = [];
+  } else {
+    state.warehouseTransactions = whTx || [];
+  }
+
+  if(openRoomId && !state.rooms.find(r=>r.id===openRoomId)) openRoomId = null;
+
+  setStatus(true, 'Real vaqtda ulangan');
+  render();
+}
+
+function computeWhQty(itemId){
+  return state.warehouseTransactions
+    .filter(t=> t.item_id===itemId)
+    .reduce((s,t)=> s + (t.type==='kirim' ? (parseFloat(t.qty)||0) : -(parseFloat(t.qty)||0)), 0);
+}
+
+function roomTotal(room){ return room.items.reduce((s,it)=> s + (parseInt(it.qty)||0), 0); }
+function grandTotal(){ return state.rooms.reduce((s,r)=> s + roomTotal(r), 0); }
+function lowStockItems(){ return state.warehouseItems.filter(it=> computeWhQty(it.id) <= 0); }
+
+function allItemNames(){
+  const names = new Set();
+  state.rooms.forEach(r=> r.items.forEach(it=>{ if(it.name && it.name.trim()) names.add(it.name.trim()); }));
+  return Array.from(names).sort((a,b)=> a.localeCompare(b,'uz'));
+}
+
+function renderDatalist(){
+  const dl = document.getElementById('itemNamesList');
+  dl.innerHTML = allItemNames().map(n=> `<option value="${escapeAttr(n)}">`).join('');
+}
+
+/* ---------- top-level render dispatch ---------- */
+function render(){
+  document.getElementById('grandTotal').textContent = grandTotal();
+  renderSidebar();
+  renderDatalist();
+  if(isTypingInThisRoom){ pendingRerender = true; return; }
+  if(activeView === 'dashboard') renderDashboard();
+  else if(activeView === 'rooms'){
+    if(openRoomId) renderRoomDetail(openRoomId);
+    else renderRoomsGrid();
+  }
+  else if(activeView === 'warehouse') renderWarehouse();
+  else if(activeView === 'summary') renderSummary();
+  else if(activeView === 'labels') renderLabels();
+}
+
+function itemPublicUrl(itemId){
+  return APP_BASE_URL + '?item=' + encodeURIComponent(itemId);
+}
+
+/* Excel/Google Sheets ichida avtomatik QR rasm chizadigan IMAGE() formulasini qaytaradi.
+   urlCellRef — havola yozilgan katak manzili (masalan 'E2'). */
+function qrImageFormula(urlCellRef, size){
+  size = size || 150;
+  return `IMAGE("https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data="&ENCODEURL(${urlCellRef}))`;
+}
+
+function generateItemCode(room, position){
+  const raw = (room.name||'XON').replace(/[^a-zA-Zʻʼ'0-9\u0400-\u04FF]/g,'');
+  const prefix = (raw.slice(0,3) || 'XON').toUpperCase();
+  const num = String(position||1).padStart(3,'0');
+  return `${prefix}-${num}`;
+}
+
+function renderSidebar(){
+  document.getElementById('roomsCount').textContent = state.rooms.length;
+  ['navDashboard','navRooms','navWarehouse','navSummary','navLabels'].forEach(id=>{
+    const el = document.getElementById(id);
+    const view = el.getAttribute('data-view');
+    el.className = 'nav-item' + (activeView===view ? ' active' : '');
+  });
+}
+
+function goTo(view){ activeView = view; if(view!=='rooms') openRoomId = null; isTypingInThisRoom=false; render(); }
+document.getElementById('navDashboard').onclick = ()=> goTo('dashboard');
+document.getElementById('navRooms').onclick = ()=>{ openRoomId=null; goTo('rooms'); };
+document.getElementById('navWarehouse').onclick = ()=> goTo('warehouse');
+document.getElementById('navSummary').onclick = ()=> goTo('summary');
+document.getElementById('navLabels').onclick = ()=> goTo('labels');
+
+/* ---------- dashboard ---------- */
+function renderDashboard(){
+  const main = document.getElementById('mainArea');
+  const low = lowStockItems();
+  const recentTx = state.warehouseTransactions.slice(0,6);
+  const roomPreview = state.rooms.slice(0,6);
+
+  const statHtml = `
+    <div class="stat-grid">
+      <div class="stat-card"><div class="v">${state.rooms.length}</div><div class="l">Xonalar soni</div></div>
+      <div class="stat-card"><div class="v">${grandTotal()}</div><div class="l">Jami jihoz (xonalarda)</div></div>
+      <div class="stat-card"><div class="v">${state.warehouseItems.length}</div><div class="l">Ombordagi jihoz turlari</div></div>
+      <div class="stat-card"><div class="v${low.length?' warn':''}">${low.length}</div><div class="l">Kam qolgan / tugagan</div></div>
+    </div>`;
+
+  const roomCards = roomPreview.map(r=> `
+    <div class="room-card" data-open-room="${r.id}">
+      <div class="name display">${escapeHtml(r.name)}</div>
+      <div class="meta"><span class="tot num">${roomTotal(r)} dona</span><span class="cnt">${r.items.length} jihoz</span></div>
+    </div>`).join('');
+
+  const activityHtml = recentTx.length ? recentTx.map(t=>{
+    const item = state.warehouseItems.find(i=>i.id===t.item_id);
+    const badgeClass = t.type==='kirim' ? 'tx-badge in' : 'tx-badge out';
+    const badgeText = t.type==='kirim' ? '⬇ Kirim' : '⬆ Chiqim';
+    return `<div class="activity-row">
+      <span class="${badgeClass}">${badgeText}</span>
+      <span class="a-item">${escapeHtml(item?item.name:'(oʻchirilgan jihoz)')} — <span class="num">${t.qty}</span></span>
+      <span class="a-meta">${escapeHtml(t.person||'')} · ${escapeHtml(t.tx_date||'')}</span>
+    </div>`;
+  }).join('') : '<div class="empty-note">Hozircha ombor harakati yoʻq.</div>';
+
+  const lowStripHtml = low.length ? `
+    <div class="low-stock-strip">
+      ${low.slice(0,8).map(it=> `<span class="low-chip">⚠ ${escapeHtml(it.name)}</span>`).join('')}
+    </div>` : '';
+
+  main.innerHTML = `
+    <div class="page-head">
+      <h2 class="display">Bosh sahifa</h2>
+      <div class="desc">Klinika inventari va ombor holatining umumiy koʻrinishi.</div>
+    </div>
+    ${statHtml}
+    ${lowStripHtml}
+    <div class="section-block">
+      <div class="section-block-head">
+        <h3>Xonalar</h3>
+        <span class="section-link" id="dashRoomsLink">Barchasini koʻrish →</span>
+      </div>
+      <div class="rooms-grid">
+        ${roomCards || '<div class="empty-note">Hozircha xona qoʻshilmagan.</div>'}
+      </div>
+    </div>
+    <div class="section-block">
+      <div class="section-block-head">
+        <h3>Soʻnggi ombor harakatlari</h3>
+        <span class="section-link" id="dashWhLink">Omborni koʻrish →</span>
+      </div>
+      <div class="activity-list">${activityHtml}</div>
+    </div>
+  `;
+
+  document.getElementById('dashRoomsLink').onclick = ()=> goTo('rooms');
+  document.getElementById('dashWhLink').onclick = ()=> goTo('warehouse');
+  main.querySelectorAll('[data-open-room]').forEach(el=>{
+    el.onclick = ()=>{ openRoomId = el.getAttribute('data-open-room'); goTo('rooms'); };
+  });
+}
+
+/* ---------- rooms grid ---------- */
+function renderRoomsGrid(){
+  const main = document.getElementById('mainArea');
+  const cards = state.rooms.map(r=> `
+    <div class="room-card" data-open-room="${r.id}">
+      <div class="name display">${escapeHtml(r.name)}</div>
+      <div class="meta"><span class="tot num">${roomTotal(r)} dona</span><span class="cnt">${r.items.length} jihoz</span></div>
+    </div>`).join('');
+
+  main.innerHTML = `
+    <div class="page-head">
+      <h2 class="display">Xonalar</h2>
+      <div class="desc">Har bir xonadagi jihozlar roʻyxatini koʻrish uchun kartani tanlang.</div>
+    </div>
+    <div class="rooms-grid">
+      ${cards}
+      <div class="add-room-card" id="addRoomCard">+ Yangi xona qoʻshish</div>
+    </div>
+  `;
+
+  main.querySelectorAll('[data-open-room]').forEach(el=>{
+    el.onclick = ()=>{ openRoomId = el.getAttribute('data-open-room'); render(); };
+  });
+  document.getElementById('addRoomCard').onclick = addRoom;
+}
+
+async function addRoom(){
+  const name = prompt('Yangi xona nomi:');
+  if(!name || !name.trim()) return;
+  const nextPos = state.rooms.length ? Math.max(...state.rooms.map(r=>r.position||0)) + 1 : 1;
+  const { data, error } = await sb.from('rooms').insert({ name: name.trim(), position: nextPos }).select().single();
+  if(error){ showToast('Qoʻshishda xatolik', true); return; }
+  state.rooms.push({ ...data, items: [] });
+  openRoomId = data.id;
+  render();
+}
+
+/* ---------- room detail ---------- */
+function renderRoomDetail(roomId){
+  const room = state.rooms.find(r=>r.id===roomId);
+  const main = document.getElementById('mainArea');
+  if(!room){ openRoomId=null; renderRoomsGrid(); return; }
+
+  main.innerHTML = `
+    <div class="breadcrumb" id="backToRooms">← Xonalar</div>
+    <div class="room-header">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <input class="room-name display" id="roomNameInput" value="${escapeAttr(room.name)}">
+      </div>
+      <div class="room-meta">
+        <span class="room-total-chip">Jami: ${roomTotal(room)} dona</span>
+        <button class="delete-room-btn" id="delRoomBtn">Xonani oʻchirish</button>
+      </div>
+    </div>
+    <div class="responsible-row">
+      <span class="r-label">Masʼul shaxs:</span>
+      <input id="responsiblePersonInput" type="text" placeholder="F.I.Sh. kiriting" value="${escapeAttr(room.responsible_person||'')}">
+    </div>
+    <table class="inv" style="margin-top:16px;">
+      <thead><tr><th>Jihoz</th><th class="qty-col">Soni</th><th class="action-col"></th><th class="action-col"></th><th class="action-col"></th></tr></thead>
+      <tbody id="itemsBody"></tbody>
+    </table>
+    <div class="add-item-row">
+      <input class="new-name" id="newItemName" placeholder="Yangi jihoz nomi (mavjudlardan tanlang yoki yangi yozing)" type="text" list="itemNamesList">
+      <input class="new-qty num" id="newItemQty" placeholder="Soni" type="number" min="0" value="1">
+      <input class="new-qty" id="newItemCode" placeholder="Kod (boʻsh — avtomatik)" type="text" style="width:150px;">
+      <button id="addItemBtn">+ Qoʻshish</button>
+      <div class="hint">Kod maydonini boʻsh qoldirsangiz, avtomatik yaratiladi (masalan: XON-004).</div>
+    </div>
+  `;
+
+  document.getElementById('backToRooms').onclick = ()=>{ openRoomId=null; render(); };
+
+  const body = document.getElementById('itemsBody');
+  room.items.forEach(item=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input class="item-name" type="text" value="${escapeAttr(item.name)}" list="itemNamesList"></td>
+      <td class="qty-col"><input class="item-qty num" type="number" min="0" value="${item.qty}"></td>
+      <td class="action-col"><button class="info-btn" title="Toʻliq maʼlumot">ℹ</button></td>
+      <td class="action-col"><button class="qr-btn" title="QR kod">▦</button></td>
+      <td class="action-col"><button class="row-del" title="Oʻchirish">✕</button></td>
+    `;
+    const nameInput = tr.querySelector('.item-name');
+    const qtyInput = tr.querySelector('.item-qty');
+    const delBtn = tr.querySelector('.row-del');
+    tr.querySelector('.info-btn').onclick = ()=> openItemDetailModal(item, room);
+    tr.querySelector('.qr-btn').onclick = ()=> openQrModal(item, room);
+
+    const markTyping = ()=>{ isTypingInThisRoom = true; };
+    const markDoneTyping = ()=>{
+      isTypingInThisRoom = false;
+      if(pendingRerender){ pendingRerender = false; render(); }
+    };
+
+    nameInput.addEventListener('focus', markTyping);
+    qtyInput.addEventListener('focus', markTyping);
+    nameInput.addEventListener('blur', markDoneTyping);
+    qtyInput.addEventListener('blur', markDoneTyping);
+
+    nameInput.oninput = debounce(async ()=>{
+      item.name = nameInput.value;
+      const { error } = await sb.from('items').update({ name: item.name }).eq('id', item.id);
+      if(error) showToast('Saqlashda xatolik', true); else showToast('Saqlandi');
+    }, 500);
+
+    qtyInput.oninput = debounce(async ()=>{
+      item.qty = qtyInput.value === '' ? 0 : parseInt(qtyInput.value)||0;
+      document.querySelector('.room-total-chip').textContent = `Jami: ${roomTotal(room)} dona`;
+      document.getElementById('grandTotal').textContent = grandTotal();
+      renderSidebar();
+      const { error } = await sb.from('items').update({ qty: item.qty }).eq('id', item.id);
+      if(error) showToast('Saqlashda xatolik', true); else showToast('Saqlandi');
+    }, 500);
+
+    delBtn.onclick = async ()=>{
+      const { error } = await sb.from('items').delete().eq('id', item.id);
+      if(error){ showToast('Oʻchirishda xatolik', true); return; }
+      room.items = room.items.filter(it=>it.id!==item.id);
+      render();
+    };
+    body.appendChild(tr);
+  });
+
+  document.getElementById('roomNameInput').addEventListener('focus', ()=>{ isTypingInThisRoom = true; });
+  document.getElementById('roomNameInput').addEventListener('blur', ()=>{
+    isTypingInThisRoom = false;
+    if(pendingRerender){ pendingRerender = false; render(); }
+  });
+  document.getElementById('roomNameInput').oninput = debounce(async ()=>{
+    room.name = document.getElementById('roomNameInput').value;
+    const { error } = await sb.from('rooms').update({ name: room.name }).eq('id', room.id);
+    if(error) showToast('Saqlashda xatolik', true); else showToast('Saqlandi');
+  }, 500);
+
+  const rpInput = document.getElementById('responsiblePersonInput');
+  rpInput.addEventListener('focus', ()=>{ isTypingInThisRoom = true; });
+  rpInput.addEventListener('blur', ()=>{
+    isTypingInThisRoom = false;
+    if(pendingRerender){ pendingRerender = false; render(); }
+  });
+  rpInput.oninput = debounce(async ()=>{
+    room.responsible_person = rpInput.value;
+    const { error } = await sb.from('rooms').update({ responsible_person: room.responsible_person }).eq('id', room.id);
+    if(error) showToast('Saqlashda xatolik', true); else showToast('Saqlandi');
+  }, 500);
+
+  document.getElementById('delRoomBtn').onclick = async ()=>{
+    if(!confirm(`"${room.name}" xonasini butunlay oʻchirmoqchimisiz? Ichidagi barcha jihozlar ham oʻchadi.`)) return;
+    const { error } = await sb.from('rooms').delete().eq('id', room.id);
+    if(error){ showToast('Oʻchirishda xatolik', true); return; }
+    state.rooms = state.rooms.filter(r=>r.id!==room.id);
+    openRoomId = null;
+    render();
+  };
+
+  document.getElementById('addItemBtn').onclick = ()=> addItem(room);
+  document.getElementById('newItemQty').addEventListener('keydown', e=>{ if(e.key==='Enter') addItem(room); });
+  document.getElementById('newItemName').addEventListener('keydown', e=>{ if(e.key==='Enter') addItem(room); });
+  document.getElementById('newItemCode').addEventListener('keydown', e=>{ if(e.key==='Enter') addItem(room); });
+}
+
+async function addItem(room){
+  const nameInput = document.getElementById('newItemName');
+  const qtyInput = document.getElementById('newItemQty');
+  const codeInput = document.getElementById('newItemCode');
+  const name = nameInput.value.trim();
+  if(!name){ nameInput.focus(); return; }
+  const qty = qtyInput.value==='' ? 1 : parseInt(qtyInput.value)||0;
+  const nextPos = room.items.length ? Math.max(...room.items.map(i=>i.position||0)) + 1 : 1;
+  const code = codeInput.value.trim() || generateItemCode(room, nextPos);
+
+  const { data, error } = await sb.from('items').insert({ room_id: room.id, name, qty, position: nextPos, code }).select().single();
+  if(error){ showToast('Qoʻshishda xatolik', true); return; }
+  room.items.push(data);
+  render();
+}
+
+/* ---------- modal helpers ---------- */
+function closeModal(){
+  document.getElementById('modalRoot').innerHTML = '';
+}
+
+function openItemDetailModal(item, room){
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `
+    <div class="modal-overlay" id="modalOverlay">
+      <div class="modal-box">
+        <div class="modal-head">
+          <h3 class="display">Jihoz haqida toʻliq maʼlumot</h3>
+          <button class="modal-close" id="modalCloseBtn">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="field-group"><label>Nomi</label><div class="field-static">${escapeHtml(item.name)}</div></div>
+          <div class="field-group"><label>Soni</label><div class="field-static">${item.qty}</div></div>
+          <div class="field-group"><label>Xona</label><div class="field-static">${escapeHtml(room.name)}</div></div>
+          <div class="field-group"><label>Masʼul shaxs</label><div class="field-static">${escapeHtml(room.responsible_person || '— belgilanmagan')}</div></div>
+          <div class="field-group"><label>Inventar kodi</label>
+            <div style="display:flex;gap:6px;">
+              <input id="mdCode" type="text" value="${escapeAttr(item.code||'')}" placeholder="Masalan: KAB1-003" style="flex:1;">
+              <button class="btn-secondary" id="mdAutoCodeBtn" type="button" title="Avtomatik yaratish">🎲</button>
+            </div>
+          </div>
+          <div class="field-group"><label>Roʻyxatga olingan sana</label><input id="mdDate" type="date" value="${escapeAttr(item.added_date||'')}"></div>
+          <div class="field-group"><label>Izoh</label><textarea id="mdNote" placeholder="Qoʻshimcha izoh...">${escapeHtml(item.note||'')}</textarea></div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-secondary" id="mdQrBtn">▦ QR kod koʻrish</button>
+          <button class="btn-primary" id="mdSaveBtn">Saqlash</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('modalCloseBtn').onclick = closeModal;
+  document.getElementById('modalOverlay').addEventListener('click', (e)=>{ if(e.target.id==='modalOverlay') closeModal(); });
+  document.getElementById('mdQrBtn').onclick = ()=> openQrModal(item, room);
+  document.getElementById('mdAutoCodeBtn').onclick = ()=>{
+    document.getElementById('mdCode').value = generateItemCode(room, item.position || (room.items.indexOf(item)+1));
+  };
+  document.getElementById('mdSaveBtn').onclick = async ()=>{
+    const code = document.getElementById('mdCode').value.trim();
+    const added_date = document.getElementById('mdDate').value || null;
+    const note = document.getElementById('mdNote').value.trim();
+    const { error } = await sb.from('items').update({ code, added_date, note }).eq('id', item.id);
+    if(error){ showToast('Saqlashda xatolik', true); return; }
+    item.code = code; item.added_date = added_date; item.note = note;
+    closeModal();
+    showToast('Saqlandi');
+  };
+}
+
+function openQrModal(item, room){
+  const root = document.getElementById('modalRoot');
+  const url = itemPublicUrl(item.id);
+  root.innerHTML = `
+    <div class="modal-overlay" id="modalOverlay">
+      <div class="modal-box">
+        <div class="modal-head">
+          <h3 class="display">QR kod — ${escapeHtml(item.name)}</h3>
+          <button class="modal-close" id="modalCloseBtn">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="qr-view">
+            <div id="qrCanvasHolder"></div>
+            <div class="qr-link">${escapeHtml(url)}</div>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <div style="display:flex;gap:8px;">
+            <button class="btn-secondary" id="qrCopyBtn">🔗 Nusxalash</button>
+            <button class="btn-secondary" id="qrDownloadBtn">⬇ Yorliq (PNG)</button>
+          </div>
+          <button class="btn-primary" id="modalDoneBtn">Yopish</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('modalCloseBtn').onclick = closeModal;
+  document.getElementById('modalDoneBtn').onclick = closeModal;
+  document.getElementById('modalOverlay').addEventListener('click', (e)=>{ if(e.target.id==='modalOverlay') closeModal(); });
+
+  new QRCode(document.getElementById('qrCanvasHolder'), {
+    text: url, width: 220, height: 220,
+    colorDark: '#0f2b29', colorLight: '#ffffff'
+  });
+
+  document.getElementById('qrCopyBtn').onclick = async ()=>{
+    try{
+      await navigator.clipboard.writeText(url);
+      showToast('Havola nusxalandi');
+    }catch(err){
+      showToast('Nusxalab boʻlmadi', true);
+    }
+  };
+
+  document.getElementById('qrDownloadBtn').onclick = ()=>{
+    setTimeout(()=>{
+      const src = document.querySelector('#qrCanvasHolder img') || document.querySelector('#qrCanvasHolder canvas');
+      const qrSize = 220, padding = 24, labelHeight = 66;
+      const canvas = document.createElement('canvas');
+      canvas.width = qrSize + padding*2;
+      canvas.height = qrSize + padding*2 + labelHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+
+      const finishAndSave = ()=>{
+        ctx.fillStyle = '#1b211f';
+        ctx.textAlign = 'center';
+        ctx.font = '600 15px Arial, sans-serif';
+        wrapText(ctx, item.name, canvas.width/2, qrSize + padding + 22, canvas.width - 16, 18);
+        ctx.font = '400 12px monospace';
+        ctx.fillStyle = '#8f6529';
+        ctx.fillText(item.code || room.name, canvas.width/2, canvas.height - 12);
+        const a = document.createElement('a');
+        a.href = canvas.toDataURL('image/png');
+        a.download = `qr-${(item.code||item.name).replace(/[^a-zA-Z0-9а-яА-ЯёЁ_-]+/g,'_')}.png`;
+        a.click();
+      };
+
+      if(src.tagName==='CANVAS'){
+        ctx.drawImage(src, padding, padding, qrSize, qrSize);
+        finishAndSave();
+      } else {
+        const img = new Image();
+        img.onload = ()=>{ ctx.drawImage(img, padding, padding, qrSize, qrSize); finishAndSave(); };
+        img.src = src.src;
+      }
+    }, 120);
+  };
+}
+
+/* Canvas ichida matnni maksimal kenglikka moslab 2 qatorgacha bo'lib chizadi */
+function wrapText(ctx, text, x, y, maxWidth, lineHeight){
+  const words = String(text||'').split(' ');
+  let line = '';
+  const lines = [];
+  words.forEach(word=>{
+    const test = line ? line + ' ' + word : word;
+    if(ctx.measureText(test).width > maxWidth && line){
+      lines.push(line);
+      line = word;
+    } else {
+      line = test;
+    }
+  });
+  if(line) lines.push(line);
+  lines.slice(0,2).forEach((l,i)=> ctx.fillText(l, x, y + i*lineHeight));
+}
+
+/* ---------- public scan view ---------- */
+async function renderScanView(itemId){
+  document.querySelector('header.top').style.display = 'none';
+  document.querySelector('.sidebar').style.display = 'none';
+  const main = document.getElementById('mainArea');
+  main.innerHTML = '<div class="loading">Yuklanmoqda...</div>';
+
+  const { data: item, error: iErr } = await sb.from('items').select('*').eq('id', itemId).single();
+  if(iErr || !item){
+    main.innerHTML = `<div class="scan-wrap"><div class="scan-card"><h2 class="display">Topilmadi</h2><div class="code">Bu jihoz oʻchirilgan yoki mavjud emas.</div></div></div>`;
+    return;
+  }
+  const { data: room } = await sb.from('rooms').select('*').eq('id', item.room_id).single();
+
+  main.innerHTML = `
+    <div class="scan-wrap">
+      <div class="scan-card">
+        <h2 class="display">${escapeHtml(item.name)}</h2>
+        <div class="code">${item.code ? 'Kod: ' + escapeHtml(item.code) : ''}</div>
+        <div class="scan-row"><span class="k">Soni</span><span class="v">${item.qty}</span></div>
+        <div class="scan-row"><span class="k">Xona</span><span class="v">${escapeHtml(room ? room.name : '—')}</span></div>
+        <div class="scan-row"><span class="k">Masʼul shaxs</span><span class="v">${escapeHtml(room && room.responsible_person ? room.responsible_person : '— belgilanmagan')}</span></div>
+        <div class="scan-row"><span class="k">Roʻyxatga olingan sana</span><span class="v">${escapeHtml(item.added_date || '—')}</span></div>
+        <div class="scan-row"><span class="k">Izoh</span><span class="v">${escapeHtml(item.note || '—')}</span></div>
+      </div>
+    </div>
+  `;
+}
+
+/* ---------- labels (print) ---------- */
+function renderLabels(){
+  const main = document.getElementById('mainArea');
+  const roomOptions = ['<option value="all">Barcha xonalar</option>']
+    .concat(state.rooms.map(r=> `<option value="${r.id}">${escapeHtml(r.name)}</option>`))
+    .join('');
+
+  main.innerHTML = `
+    <div class="page-head">
+      <h2 class="display">Yorliqlar</h2>
+      <div class="desc">Har bir jihoz uchun QR yorliq. Xonani tanlang, soʻng chop eting va jihozlarga yopishtiring.</div>
+    </div>
+    <div class="labels-toolbar">
+      <select id="labelsRoomSelect">${roomOptions}</select>
+      <button class="btn-primary" id="labelsPrintBtn">🖨 Chop etish</button>
+    </div>
+    <div class="labels-sheet" id="labelsSheet"></div>
+  `;
+
+  document.getElementById('labelsRoomSelect').onchange = renderLabelsSheet;
+  document.getElementById('labelsPrintBtn').onclick = ()=> window.print();
+  renderLabelsSheet();
+}
+
+function renderLabelsSheet(){
+  const sel = document.getElementById('labelsRoomSelect').value;
+  const sheet = document.getElementById('labelsSheet');
+  const rooms = sel==='all' ? state.rooms : state.rooms.filter(r=> r.id===sel);
+  const cards = [];
+  rooms.forEach(r=> r.items.forEach(it=>{
+    cards.push(`
+      <div class="label-card">
+        <div class="lname">${escapeHtml(it.name)}</div>
+        <div class="lroom">${escapeHtml(r.name)}</div>
+        <div class="qr-holder" data-qr-url="${escapeAttr(itemPublicUrl(it.id))}"></div>
+        <div class="lcode">${escapeHtml(it.code || it.id.slice(0,8))}</div>
+      </div>`);
+  }));
+  sheet.innerHTML = cards.join('') || '<div class="empty-note">Bu xonada jihoz yoʻq.</div>';
+  sheet.querySelectorAll('[data-qr-url]').forEach(holder=>{
+    new QRCode(holder, { text: holder.getAttribute('data-qr-url'), width: 84, height: 84, colorDark:'#0f2b29', colorLight:'#ffffff' });
+  });
+}
+
+/* ---------- summary ---------- */
+function renderSummary(){
+  const main = document.getElementById('mainArea');
+  const agg = {};
+  state.rooms.forEach(r=> r.items.forEach(it=>{
+    const key = (it.name||'').trim() || '(nomsiz)';
+    agg[key] = (agg[key]||0) + (parseInt(it.qty)||0);
+  }));
+  const rows = Object.entries(agg).filter(([,v])=>v>0).sort((a,b)=> b[1]-a[1]);
+  const bodyHtml = rows.map(([name,total])=> `<tr><td>${escapeHtml(name)}</td><td class="num-col">${total}</td></tr>`).join('');
+
+  main.innerHTML = `
+    <div class="page-head">
+      <h2 class="display">Umumiy hisobot</h2>
+      <div class="desc">${state.rooms.length} ta xona boʻyicha qayd qilingan jihozlar. 0 deb koʻrsatilgan jihozlar bu jadvalga kiritilmagan.</div>
+    </div>
+    <table class="summary">
+      <thead><tr><th>Jihoz</th><th class="num-col">Jami</th></tr></thead>
+      <tbody>
+        ${bodyHtml || '<tr><td colspan="2" style="color:var(--ink-soft);">Hozircha maʼlumot yoʻq.</td></tr>'}
+        <tr class="total-row"><td>Umumiy jami</td><td class="num-col">${grandTotal()}</td></tr>
+      </tbody>
+    </table>
+  `;
+}
+
+/* ---------- warehouse ---------- */
+function renderWarehouse(){
+  const main = document.getElementById('mainArea');
+  const items = state.warehouseItems;
+  const txs = state.warehouseTransactions;
+
+  const filterOptions = ['<option value="all">Barcha jihozlar</option>']
+    .concat(items.map(it=> `<option value="${it.id}" ${whItemFilter===it.id?'selected':''}>${escapeHtml(it.name)}</option>`))
+    .join('');
+
+  const stockRows = items.map(it=>{
+    const qty = computeWhQty(it.id);
+    return `<tr>
+      <td>${escapeHtml(it.name)}</td>
+      <td class="qty-col num${qty<=0?' wh-stock-low':''}">${qty}</td>
+      <td>${escapeHtml(it.unit||'dona')}</td>
+      <td class="action-col"><button class="row-del" data-del-wh-item="${it.id}" title="Oʻchirish">✕</button></td>
+    </tr>`;
+  }).join('');
+
+  const filteredTx = txs
+    .filter(t=> whItemFilter==='all' || t.item_id===whItemFilter)
+    .slice()
+    .sort((a,b)=> (b.tx_date||'').localeCompare(a.tx_date||'') || String(b.created_at||'').localeCompare(String(a.created_at||'')));
+
+  const txRows = filteredTx.map(t=>{
+    const item = items.find(i=>i.id===t.item_id);
+    const badgeClass = t.type==='kirim' ? 'tx-badge in' : 'tx-badge out';
+    const badgeText = t.type==='kirim' ? '⬇ Kirim' : '⬆ Chiqim';
+    return `<tr>
+      <td class="num">${escapeHtml(t.tx_date||'')}</td>
+      <td><span class="${badgeClass}">${badgeText}</span></td>
+      <td>${escapeHtml(item ? item.name : '(oʻchirilgan jihoz)')}</td>
+      <td class="qty-col num">${t.qty}</td>
+      <td>${escapeHtml(t.person||'')}</td>
+      <td>${escapeHtml(t.note||'')}</td>
+      <td class="action-col"><button class="row-del" data-del-wh-tx="${t.id}" title="Oʻchirish">✕</button></td>
+    </tr>`;
+  }).join('');
+
+  const low = lowStockItems();
+  const lowStripHtml = low.length ? `
+    <div class="low-stock-strip">
+      ${low.map(it=> `<span class="low-chip">⚠ ${escapeHtml(it.name)} — tugagan</span>`).join('')}
+    </div>` : '';
+
+  main.innerHTML = `
+    <div class="page-head" style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+      <div>
+        <h2 class="display">Ombor</h2>
+        <div class="desc">Ombordagi jihozlar, kirim va chiqim harakatlarining toʻliq qaydnomasi. Qoldiq avtomatik hisoblanadi (kirim − chiqim).</div>
+      </div>
+      <button class="export-btn" id="exportWhBtn" style="background:var(--teal);">⬇ Omborni Excelga eksport</button>
+    </div>
+    ${lowStripHtml}
+    <div class="wh-columns">
+      <div>
+        <div class="section-block">
+          <div class="section-block-head"><h3>Ombordagi qoldiq</h3></div>
+          <table class="inv">
+            <thead><tr><th>Jihoz</th><th class="qty-col">Qoldiq</th><th>Birlik</th><th class="action-col"></th></tr></thead>
+            <tbody>${stockRows || '<tr><td colspan="4" style="color:var(--ink-soft);">Hozircha jihoz yoʻq.</td></tr>'}</tbody>
+          </table>
+          <div class="add-item-row">
+            <input class="new-name" id="newWhItemName" placeholder="Yangi jihoz nomi" type="text" list="whItemNamesList">
+            <input class="new-qty" id="newWhItemUnit" placeholder="Birlik (dona)" type="text" style="width:120px;">
+            <button id="addWhItemBtn">+ Jihoz qoʻshish</button>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="section-block">
+          <div class="section-block-head"><h3>Yangi harakat qoʻshish</h3></div>
+          <div class="wh-tx-form">
+            <select id="newTxType">
+              <option value="kirim">⬇ Kirim (nimadir keldi)</option>
+              <option value="chiqim">⬆ Chiqim (nimadir ketdi)</option>
+            </select>
+            <input id="newTxItem" placeholder="Jihoz nomi" type="text" list="whItemNamesList" style="min-width:150px;">
+            <input id="newTxQty" placeholder="Miqdor" type="number" min="0" style="width:90px;">
+            <input id="newTxPerson" placeholder="Kim (F.I.Sh.)" type="text" style="min-width:150px;">
+            <input id="newTxDate" type="date">
+            <input id="newTxNote" placeholder="Izoh (ixtiyoriy)" type="text" style="flex:1;min-width:150px;">
+            <button id="addTxBtn">+ Qoʻshish</button>
+          </div>
+          <div class="hint">Kirimda — kim olib kelgani, chiqimda — kim olib ketgani koʻrsatiladi. Yozilgan jihoz nomi mavjud boʻlmasa, avtomatik yaratiladi.</div>
+        </div>
+        <div class="section-block">
+          <div class="wh-tx-filter-row">
+            <h3 class="display" style="margin:0;font-size:1.05rem;color:var(--teal-deep);">Harakatlar tarixi</h3>
+            <select id="whFilterSelect">${filterOptions}</select>
+          </div>
+          <table class="inv">
+            <thead><tr><th>Sana</th><th>Turi</th><th>Jihoz</th><th class="qty-col">Miqdor</th><th>Kim</th><th>Izoh</th><th class="action-col"></th></tr></thead>
+            <tbody>${txRows || '<tr><td colspan="7" style="color:var(--ink-soft);">Hozircha harakat yoʻq.</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const dateInput = document.getElementById('newTxDate');
+  if(dateInput) dateInput.value = new Date().toISOString().slice(0,10);
+
+  document.getElementById('addWhItemBtn').onclick = addWhItem;
+  document.getElementById('newWhItemName').addEventListener('keydown', e=>{ if(e.key==='Enter') addWhItem(); });
+  document.getElementById('addTxBtn').onclick = addWhTransaction;
+  document.getElementById('whFilterSelect').onchange = (e)=>{ whItemFilter = e.target.value; renderWarehouse(); };
+  document.getElementById('exportWhBtn').onclick = exportWarehouseExcel;
+
+  main.querySelectorAll('[data-del-wh-item]').forEach(btn=>{
+    btn.onclick = ()=> deleteWhItem(btn.getAttribute('data-del-wh-item'));
+  });
+  main.querySelectorAll('[data-del-wh-tx]').forEach(btn=>{
+    btn.onclick = ()=> deleteWhTransaction(btn.getAttribute('data-del-wh-tx'));
+  });
+
+  renderWhDatalist();
+}
+
+function renderWhDatalist(){
+  const dl = document.getElementById('whItemNamesList');
+  if(dl) dl.innerHTML = state.warehouseItems.map(it=> `<option value="${escapeAttr(it.name)}">`).join('');
+}
+
+async function findOrCreateWhItem(name, unit){
+  name = (name||'').trim();
+  if(!name) return null;
+  let item = state.warehouseItems.find(i=> i.name.trim().toLowerCase() === name.toLowerCase());
+  if(item) return item;
+  const nextPos = state.warehouseItems.length ? Math.max(...state.warehouseItems.map(i=>i.position||0)) + 1 : 1;
+  const { data, error } = await sb.from('warehouse_items').insert({ name, unit: (unit||'').trim() || 'dona', position: nextPos }).select().single();
+  if(error){ showToast('Jihoz yaratishda xatolik', true); return null; }
+  state.warehouseItems.push(data);
+  return data;
+}
+
+async function addWhItem(){
+  const nameInput = document.getElementById('newWhItemName');
+  const unitInput = document.getElementById('newWhItemUnit');
+  const name = nameInput.value.trim();
+  if(!name){ nameInput.focus(); return; }
+  const item = await findOrCreateWhItem(name, unitInput.value);
+  if(item){
+    nameInput.value=''; unitInput.value='';
+    renderWarehouse();
+    showToast('Jihoz qoʻshildi');
+  }
+}
+
+async function deleteWhItem(id){
+  if(!confirm('Bu jihozni va uning barcha harakatlar tarixini butunlay oʻchirmoqchimisiz?')) return;
+  const { error } = await sb.from('warehouse_items').delete().eq('id', id);
+  if(error){ showToast('Oʻchirishda xatolik', true); return; }
+  state.warehouseItems = state.warehouseItems.filter(i=>i.id!==id);
+  state.warehouseTransactions = state.warehouseTransactions.filter(t=>t.item_id!==id);
+  renderWarehouse();
+}
+
+async function addWhTransaction(){
+  const type = document.getElementById('newTxType').value;
+  const itemName = document.getElementById('newTxItem').value.trim();
+  const qtyRaw = document.getElementById('newTxQty').value;
+  const person = document.getElementById('newTxPerson').value.trim();
+  const date = document.getElementById('newTxDate').value;
+  const note = document.getElementById('newTxNote').value.trim();
+
+  if(!itemName){ showToast('Jihoz nomini kiriting', true); return; }
+  const qty = parseFloat(qtyRaw);
+  if(!qty || qty<=0){ showToast('Miqdorni toʻgʻri kiriting', true); return; }
+  if(!person){ showToast('Kim olib kelgani/ketganini kiriting', true); return; }
+
+  const item = await findOrCreateWhItem(itemName);
+  if(!item) return;
+
+  if(type==='chiqim'){
+    const current = computeWhQty(item.id);
+    if(qty > current){
+      if(!confirm(`Diqqat: qoldiqda ${current} ${item.unit||'dona'} bor, lekin ${qty} chiqim qilinmoqchisiz. Baribir davom etilsinmi?`)) return;
+    }
+  }
+
+  const { data, error } = await sb.from('warehouse_transactions').insert({
+    item_id: item.id, type, qty, person,
+    tx_date: date || new Date().toISOString().slice(0,10), note
+  }).select().single();
+  if(error){ showToast('Saqlashda xatolik', true); return; }
+
+  state.warehouseTransactions.push(data);
+  renderWarehouse();
+  showToast('Harakat qoʻshildi');
+}
+
+async function deleteWhTransaction(id){
+  if(!confirm('Bu yozuvni oʻchirmoqchimisiz? Qoldiq qayta hisoblanadi.')) return;
+  const { error } = await sb.from('warehouse_transactions').delete().eq('id', id);
+  if(error){ showToast('Oʻchirishda xatolik', true); return; }
+  state.warehouseTransactions = state.warehouseTransactions.filter(t=>t.id!==id);
+  renderWarehouse();
+}
+
+/* ---------- import / export ---------- */
+document.getElementById('importBtn').onclick = ()=> document.getElementById('importFileInput').click();
+document.getElementById('importFileInput').addEventListener('change', async (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  await importExcelFile(file);
+  e.target.value = '';
+});
+
+function excelDateToStr(dateRaw){
+  let dateStr = '';
+  if(dateRaw instanceof Date){
+    dateStr = dateRaw.toISOString().slice(0,10);
+  } else if(typeof dateRaw === 'number'){
+    const d = XLSX.SSF.parse_date_code(dateRaw);
+    if(d) dateStr = `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;
+  } else if(dateRaw){
+    dateStr = String(dateRaw).trim();
+  }
+  return dateStr;
+}
+
+/* Bir xil tranzaksiyani ikki marta import qilib qo'yishning oldini olish uchun "imzo" */
+function txSignature(type, itemName, qty, person, dateStr, note){
+  return [
+    type,
+    (itemName||'').trim().toLowerCase(),
+    Number(qty)||0,
+    (person||'').trim().toLowerCase(),
+    (dateStr||'').trim(),
+    (note||'').trim().toLowerCase()
+  ].join('|');
+}
+
+function buildExistingTxSignatures(){
+  const set = new Set();
+  state.warehouseTransactions.forEach(t=>{
+    const item = state.warehouseItems.find(i=>i.id===t.item_id);
+    set.add(txSignature(t.type, item?item.name:'', t.qty, t.person, t.tx_date, t.note));
+  });
+  return set;
+}
+
+/* Bitta ombor harakati qatorini import qiladi. Qaytaradi: 'created' | 'duplicate' | null(xato/boʻsh) */
+async function importTxRow({ dateRaw, type, itemName, qty, person, note, existingSigs }){
+  if(!itemName || !(qty>0)) return null;
+  const dateStr = excelDateToStr(dateRaw) || new Date().toISOString().slice(0,10);
+  const sig = txSignature(type, itemName, qty, person, dateStr, note);
+  if(existingSigs.has(sig)) return 'duplicate';
+
+  const item = await findOrCreateWhItem(itemName);
+  if(!item) return null;
+
+  const { data, error } = await sb.from('warehouse_transactions').insert({
+    item_id: item.id, type, qty, person, tx_date: dateStr, note
+  }).select().single();
+  if(error) return null;
+
+  state.warehouseTransactions.push(data);
+  existingSigs.add(sig);
+  return 'created';
+}
+
+async function importExcelFile(file){
+  showToast('Import qilinmoqda...');
+  let wb;
+  try{
+    const buf = await file.arrayBuffer();
+    wb = XLSX.read(buf, { type:'array', cellDates:true });
+  }catch(err){
+    showToast('Faylni oʻqib boʻlmadi', true);
+    return;
+  }
+
+  let roomsCreated=0, itemsAffected=0, whItemsAffected=0, txCreated=0, txDuplicates=0, qoldiqOpened=0, qoldiqSkipped=0;
+  const existingSigs = buildExistingTxSignatures();
+
+  /* 1) Xona(lar) varag'i — nom + soni. Mavjud jihoz bo'lsa soni yangilanadi. */
+  const roomSheetName = wb.SheetNames.find(n=> /xona/i.test(n) && !/ombor/i.test(n));
+  if(roomSheetName){
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[roomSheetName], { header:1, defval:'' });
+    for(let i=1;i<rows.length;i++){
+      const row = rows[i] || [];
+      const roomName = String(row[0]||'').trim();
+      const itemName = String(row[1]||'').trim();
+      if(!roomName || !itemName) continue;
+      if(/ — jami$/.test(roomName)) continue;
+      const qty = parseInt(row[2])||0;
+
+      let room = state.rooms.find(r=> r.name.trim().toLowerCase()===roomName.toLowerCase());
+      if(!room){
+        const nextPos = state.rooms.length ? Math.max(...state.rooms.map(r=>r.position||0))+1 : 1;
+        const { data, error } = await sb.from('rooms').insert({ name: roomName, position: nextPos }).select().single();
+        if(error) continue;
+        room = { ...data, items: [] };
+        state.rooms.push(room);
+        roomsCreated++;
+      }
+      let item = room.items.find(it=> it.name.trim().toLowerCase()===itemName.toLowerCase());
+      if(item){
+        item.qty = qty;
+        await sb.from('items').update({ qty }).eq('id', item.id);
+      } else {
+        const nextPos = room.items.length ? Math.max(...room.items.map(it=>it.position||0))+1 : 1;
+        const { data, error } = await sb.from('items').insert({ room_id: room.id, name: itemName, qty, position: nextPos }).select().single();
+        if(!error) room.items.push(data);
+      }
+      itemsAffected++;
+    }
+  }
+
+  /* 2) Qoldiq varag'i — endi shunchaki jihoz yaratib qo'ymaydi: agar jihozning hali
+     hech qanday harakat tarixi bo'lmasa, ko'rsatilgan miqdorda "boshlang'ich qoldiq"
+     (kirim) yozuvi yaratiladi. Tarixi bo'lgan jihozlar tegilmaydi (mavjud tarix ustidan yozilmasin). */
+  const stockSheetName = wb.SheetNames.find(n=> /qoldiq/i.test(n));
+  if(stockSheetName){
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[stockSheetName], { header:1, defval:'' });
+    for(let i=1;i<rows.length;i++){
+      const row = rows[i] || [];
+      const name = String(row[0]||'').trim();
+      if(!name) continue;
+      const unit = String(row[1]||'');
+      const qty = parseFloat(row[2]);
+
+      const item = await findOrCreateWhItem(name, unit);
+      if(!item) continue;
+      whItemsAffected++;
+
+      const hasHistory = state.warehouseTransactions.some(t=> t.item_id===item.id);
+      if(!hasHistory && qty>0){
+        const result = await importTxRow({
+          dateRaw: null, type:'kirim', itemName: name, qty, person:'Import',
+          note:'Boshlangʻich qoldiq (import)', existingSigs
+        });
+        if(result==='created') qoldiqOpened++;
+      } else if(hasHistory){
+        qoldiqSkipped++;
+      }
+    }
+  }
+
+  /* 3) Alohida "Kirim" varag'i (faqat kirim yozuvlari) */
+  const kirimSheetName = wb.SheetNames.find(n=> /^kirim$/i.test(n.trim()));
+  if(kirimSheetName){
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[kirimSheetName], { header:1, defval:'' });
+    for(let i=1;i<rows.length;i++){
+      const row = rows[i] || [];
+      const result = await importTxRow({
+        dateRaw: row[0], type:'kirim', itemName: String(row[1]||'').trim(),
+        qty: parseFloat(row[2])||0, person: String(row[3]||'').trim(), note: String(row[4]||'').trim(),
+        existingSigs
+      });
+      if(result==='created') txCreated++;
+      else if(result==='duplicate') txDuplicates++;
+    }
+  }
+
+  /* 4) Alohida "Chiqim" varag'i (faqat chiqim yozuvlari) */
+  const chiqimSheetName = wb.SheetNames.find(n=> /^chiqim$/i.test(n.trim()));
+  if(chiqimSheetName){
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[chiqimSheetName], { header:1, defval:'' });
+    for(let i=1;i<rows.length;i++){
+      const row = rows[i] || [];
+      const result = await importTxRow({
+        dateRaw: row[0], type:'chiqim', itemName: String(row[1]||'').trim(),
+        qty: parseFloat(row[2])||0, person: String(row[3]||'').trim(), note: String(row[4]||'').trim(),
+        existingSigs
+      });
+      if(result==='created') txCreated++;
+      else if(result==='duplicate') txDuplicates++;
+    }
+  }
+
+  /* 5) Birlashtirilgan "Harakatlar" varag'i — eski eksport formati bilan moslik uchun */
+  const combinedTxSheetName = wb.SheetNames.find(n=> /harakat/i.test(n));
+  if(combinedTxSheetName){
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[combinedTxSheetName], { header:1, defval:'' });
+    for(let i=1;i<rows.length;i++){
+      const row = rows[i] || [];
+      const type = /kirim/i.test(String(row[1]||'')) ? 'kirim' : 'chiqim';
+      const result = await importTxRow({
+        dateRaw: row[0], type, itemName: String(row[2]||'').trim(),
+        qty: parseFloat(row[3])||0, person: String(row[4]||'').trim(), note: String(row[5]||'').trim(),
+        existingSigs
+      });
+      if(result==='created') txCreated++;
+      else if(result==='duplicate') txDuplicates++;
+    }
+  }
+
+  render();
+  const parts = [`${roomsCreated} yangi xona`, `${itemsAffected} jihoz`, `${whItemsAffected} ombor jihozi`, `${txCreated} yangi harakat`];
+  if(qoldiqOpened) parts.push(`${qoldiqOpened} boshlangʻich qoldiq ochildi`);
+  if(txDuplicates) parts.push(`${txDuplicates} takroriy oʻtkazib yuborildi`);
+  if(qoldiqSkipped) parts.push(`${qoldiqSkipped} qoldiq (tarixi bor, oʻzgartirilmadi)`);
+  showToast(`Import: ${parts.join(', ')}`);
+}
+
+document.getElementById('exportBtn').onclick = ()=>{
+  const wb = XLSX.utils.book_new();
+
+  const detailRows = [['Xona', 'Jihoz', 'Soni']];
+  state.rooms.forEach(r=>{
+    r.items.forEach(it=>{ detailRows.push([r.name, it.name, it.qty]); });
+    detailRows.push([r.name + ' — jami', '', roomTotal(r)]);
+    detailRows.push(['','','']);
+  });
+  const ws1 = XLSX.utils.aoa_to_sheet(detailRows);
+  ws1['!cols'] = [{wch:28},{wch:30},{wch:10}];
+  XLSX.utils.book_append_sheet(wb, ws1, 'Xonalar boʻyicha');
+
+  const agg = {};
+  state.rooms.forEach(r=> r.items.forEach(it=>{
+    const key = (it.name||'').trim() || '(nomsiz)';
+    agg[key] = (agg[key]||0) + (parseInt(it.qty)||0);
+  }));
+  const summaryRows = [['Jihoz', 'Jami soni']];
+  Object.entries(agg).filter(([,v])=>v>0).sort((a,b)=> b[1]-a[1]).forEach(([name,total])=> summaryRows.push([name, total]));
+  summaryRows.push(['Umumiy jami', grandTotal()]);
+  const ws2 = XLSX.utils.aoa_to_sheet(summaryRows);
+  ws2['!cols'] = [{wch:30},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, ws2, 'Umumiy inventar');
+
+  // QR havolalar — endi 'QR rasm' ustunida IMAGE() formulasi bor, Excel/Google Sheets ochilganda QR avtomatik chiziladi
+  const qrRows = [['Xona', 'Masʼul shaxs', 'Jihoz', 'Kod', 'QR havola', 'QR rasm']];
+  state.rooms.forEach(r=> r.items.forEach(it=>{
+    qrRows.push([r.name, r.responsible_person||'', it.name, it.code||'', itemPublicUrl(it.id), '']);
+  }));
+  const ws5 = XLSX.utils.aoa_to_sheet(qrRows);
+  ws5['!cols'] = [{wch:22},{wch:20},{wch:28},{wch:14},{wch:50},{wch:18}];
+  for(let r=2; r<=qrRows.length; r++){
+    ws5[`F${r}`] = { t:'str', f: qrImageFormula(`E${r}`, 150) };
+  }
+  ws5['!rows'] = [null].concat(qrRows.slice(1).map(()=> ({ hpx: 90 })));
+  XLSX.utils.book_append_sheet(wb, ws5, 'QR havolalar');
+
+  const today = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `klinika-inventar-${today}.xlsx`);
+  showToast('Excel fayl yuklab olindi');
+};
+
+/* ---------- ombor uchun alohida Excel eksport ---------- */
+function exportWarehouseExcel(){
+  const wb = XLSX.utils.book_new();
+
+  // 1) Joriy qoldiq
+  const stockRows = [['Jihoz', 'Birlik', 'Qoldiq']];
+  state.warehouseItems.forEach(it=> stockRows.push([it.name, it.unit||'dona', computeWhQty(it.id)]));
+  const wsStock = XLSX.utils.aoa_to_sheet(stockRows);
+  wsStock['!cols'] = [{wch:28},{wch:12},{wch:10}];
+  XLSX.utils.book_append_sheet(wb, wsStock, 'Qoldiq');
+
+  // 2) Faqat kirimlar
+  const kirimRows = [['Sana', 'Jihoz', 'Miqdor', 'Kim', 'Izoh']];
+  state.warehouseTransactions
+    .filter(t=> t.type==='kirim')
+    .slice()
+    .sort((a,b)=> (a.tx_date||'').localeCompare(b.tx_date||''))
+    .forEach(t=>{
+      const item = state.warehouseItems.find(i=>i.id===t.item_id);
+      kirimRows.push([t.tx_date||'', item?item.name:'', t.qty, t.person||'', t.note||'']);
+    });
+  const wsKirim = XLSX.utils.aoa_to_sheet(kirimRows);
+  wsKirim['!cols'] = [{wch:12},{wch:28},{wch:10},{wch:20},{wch:32}];
+  XLSX.utils.book_append_sheet(wb, wsKirim, 'Kirim');
+
+  // 3) Faqat chiqimlar
+  const chiqimRows = [['Sana', 'Jihoz', 'Miqdor', 'Kim', 'Izoh']];
+  state.warehouseTransactions
+    .filter(t=> t.type==='chiqim')
+    .slice()
+    .sort((a,b)=> (a.tx_date||'').localeCompare(b.tx_date||''))
+    .forEach(t=>{
+      const item = state.warehouseItems.find(i=>i.id===t.item_id);
+      chiqimRows.push([t.tx_date||'', item?item.name:'', t.qty, t.person||'', t.note||'']);
+    });
+  const wsChiqim = XLSX.utils.aoa_to_sheet(chiqimRows);
+  wsChiqim['!cols'] = [{wch:12},{wch:28},{wch:10},{wch:20},{wch:32}];
+  XLSX.utils.book_append_sheet(wb, wsChiqim, 'Chiqim');
+
+  // 4) Ikkalasi birga — toʻliq tarix (zaxira/qayta koʻrish uchun)
+  const allRows = [['Sana', 'Turi', 'Jihoz', 'Miqdor', 'Kim', 'Izoh']];
+  state.warehouseTransactions
+    .slice()
+    .sort((a,b)=> (a.tx_date||'').localeCompare(b.tx_date||''))
+    .forEach(t=>{
+      const item = state.warehouseItems.find(i=>i.id===t.item_id);
+      allRows.push([t.tx_date||'', t.type==='kirim'?'Kirim':'Chiqim', item?item.name:'', t.qty, t.person||'', t.note||'']);
+    });
+  const wsAll = XLSX.utils.aoa_to_sheet(allRows);
+  wsAll['!cols'] = [{wch:12},{wch:10},{wch:28},{wch:10},{wch:20},{wch:32}];
+  XLSX.utils.book_append_sheet(wb, wsAll, 'Barcha harakatlar');
+
+  const today = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `ombor-${today}.xlsx`);
+  showToast('Ombor Excel fayli yuklab olindi');
+}
+
+sb.channel('inventory-sync')
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, ()=>{ loadAll(); })
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, ()=>{ loadAll(); })
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'warehouse_items' }, ()=>{ loadAll(); })
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'warehouse_transactions' }, ()=>{ loadAll(); })
+  .subscribe((status)=>{
+    if(status === 'SUBSCRIBED') setStatus(true, 'Real vaqtda ulangan');
+  });
+
+function debounce(fn, ms){
+  let t;
+  return (...args)=>{ clearTimeout(t); t = setTimeout(()=> fn(...args), ms); };
+}
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function escapeAttr(s){ return escapeHtml(s); }
+
+const scanItemId = new URLSearchParams(location.search).get('item');
+if(scanItemId){
+  renderScanView(scanItemId);
+} else {
+  loadAll();
+}
+</script>
+
+</body>
+</html>
